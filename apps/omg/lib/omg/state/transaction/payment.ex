@@ -201,11 +201,8 @@ defimpl OMG.State.Transaction.Protocol, for: OMG.State.Transaction.Payment do
   @zero_address OMG.Eth.zero_address()
   @empty_signature <<0::size(520)>>
 
-  # TODO: commented code for the tx markers handling
   # TODO: dry wrt. Application.fetch_env!(:omg, :tx_types_modules)? Use `bimap` perhaps?
-  # @payment_marker <<188, 97, 78>>
-  #
-  # end commented code
+  @payment_marker <<188, 97, 78>>
 
   @doc """
   Turns a structure instance into a structure of RLP items, ready to be RLP encoded, for a raw transaction
@@ -214,8 +211,7 @@ defimpl OMG.State.Transaction.Protocol, for: OMG.State.Transaction.Payment do
       when Transaction.Payment.is_metadata(metadata),
       do:
         [
-          # TODO: commented code for the tx markers handling
-          # @payment_marker,
+          @payment_marker,
           # contract expects 4 inputs and outputs
           Enum.map(inputs, fn Utxo.position(blknum, txindex, oindex) -> [blknum, txindex, oindex] end) ++
             List.duplicate([0, 0, 0], 4 - length(inputs)),
