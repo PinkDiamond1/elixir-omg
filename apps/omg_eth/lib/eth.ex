@@ -223,7 +223,7 @@ defmodule OMG.Eth do
   end
 
   def parse_events_with_indexed_fields(
-        %{"data" => data, "topics" => [_event_sig | indexed_data]} = log,
+        %{"transactionHash" => txn_hash, "data" => data, "topics" => [_event_sig | indexed_data]} = log,
         {non_indexed_keys, non_indexed_key_types},
         {indexed_keys, indexed_keys_types}
       ) do
@@ -251,6 +251,7 @@ defmodule OMG.Eth do
       |> Map.new()
 
     Map.merge(non_indexed_fields, indexed_fields)
+    |> Map.put(:txn_hash, txn_hash)
     |> common_parse_event(log)
   end
 
