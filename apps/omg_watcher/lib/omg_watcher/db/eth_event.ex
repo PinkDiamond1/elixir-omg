@@ -19,20 +19,25 @@ defmodule OMG.Watcher.DB.EthEvent do
   use Ecto.Schema
 
   alias OMG.Crypto
+  alias OMG.Eth.Encoding
   alias OMG.Utxo
   alias OMG.Watcher.DB
 
   require Utxo
 
-  @primary_key {:hash, :binary, []}
-  @derive {Phoenix.Param, key: :hash}
+  @primary_key {:rootchain_txnhash, :binary, []}
+  @derive {Phoenix.Param, key: :rootchain_txnhash}
   schema "ethevents" do
-    field(:blknum, :integer)
-    field(:txindex, :integer)
     field(:event_type, OMG.Watcher.DB.Types.AtomType)
 
-    has_one(:created_utxo, DB.TxOutput, foreign_key: :creating_deposit)
-    has_one(:exited_utxo, DB.TxOutput, foreign_key: :spending_exit)
+    many_to_many(
+      :txoutputs,
+      DB.TxOutput,
+      join_through: "ethevents_txoutputs",
+      join_keys: [rootchain_txnhash: :rootchain_txnhash, childchain_txnhash: :childchain_txnhash]
+    )
+
+    timestamps([type: :utc_datetime])
   end
 
   @doc """
@@ -44,26 +49,26 @@ defmodule OMG.Watcher.DB.EthEvent do
   end
 
   @spec insert_deposit!(OMG.State.Core.deposit()) :: {:ok, %__MODULE__{}} | {:error, Ecto.Changeset.t()}
-  defp insert_deposit!(%{blknum: blknum, owner: owner, currency: currency, amount: amount}) do
-    {:ok, _} =
-      if existing_deposit = DB.Repo.get(__MODULE__, deposit_key(blknum)) != nil,
-        do: {:ok, existing_deposit},
-        else:
-          %__MODULE__{
-            hash: deposit_key(blknum),
+  defp insert_deposit!(%{txn_hash: txn_hash, blknum: blknum, owner: owner, currency: currency, amount: amount}) do
+    if existing_deposit = DB.Repo.get(__MODULE__, txn_hash) != nil,
+      do: {:ok, existing_deposit},
+      else:
+        %__MODULE__{
+          rootchain_txnhash: Encoding.from_hex(txn_hash),
+          event_type: :deposit,
+
+          # a deposit from the rootchain will only ever have 1 childchain txoutput object
+          txoutputs: [%DB.TxOutput{
+            childchain_txnhash: Crypto.hash(txn_hash),
             blknum: blknum,
             txindex: 0,
-            event_type: :deposit,
-            created_utxo: %DB.TxOutput{
-              blknum: blknum,
-              txindex: 0,
-              oindex: 0,
-              owner: owner,
-              currency: currency,
-              amount: amount
-            }
-          }
-          |> DB.Repo.insert()
+            oindex: 0,
+            owner: owner,
+            currency: currency,
+            amount: amount
+          }]
+        }
+        |> DB.Repo.insert()
   end
 
   @doc """
@@ -81,21 +86,21 @@ defmodule OMG.Watcher.DB.EthEvent do
 
   @spec insert_exit!(Utxo.Position.t()) :: {:ok, %__MODULE__{}} | {:error, Ecto.Changeset.t()}
   defp insert_exit!(Utxo.position(blknum, txindex, _oindex) = position) do
-    {:ok, _} =
-      if existing_exit = get(exit_key(position)) != nil do
-        {:ok, existing_exit}
-      else
-        utxo = DB.TxOutput.get_by_position(position)
-
-        %__MODULE__{
-          hash: exit_key(position),
-          blknum: blknum,
-          txindex: txindex,
-          event_type: :exit,
-          exited_utxo: utxo
-        }
-        |> DB.Repo.insert()
-      end
+#    {:ok, _} =
+#      if existing_exit = get(exit_key(position)) != nil do
+#        {:ok, existing_exit}
+#      else
+#        utxo = DB.TxOutput.get_by_position(position)
+#
+#        %__MODULE__{
+#          hash: exit_key(position),
+#          blknum: blknum,
+#          txindex: txindex,
+#          event_type: :exit,
+#          exited_utxo: utxo
+#        }
+#        |> DB.Repo.insert()
+#      end
   end
 
   @doc """
@@ -105,6 +110,8 @@ defmodule OMG.Watcher.DB.EthEvent do
   """
   @spec generate_unique_key(Utxo.Position.t(), :deposit | :exit) :: OMG.Crypto.hash_t()
   def generate_unique_key(position, type) do
+    IO.puts("**** generating unique plash hash for ethevents table which will also populate txoutputs.creating_deposit")
+
     "<#{position |> Utxo.Position.encode()}:#{type}>" |> Crypto.hash()
   end
 

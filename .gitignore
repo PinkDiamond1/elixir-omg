@@ -46,3 +46,7 @@ env/
 # VS Code config file
 .vscode/
 
+.idea
+
+*.iml
+

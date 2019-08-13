@@ -51,12 +51,19 @@ defmodule OMG.Watcher.DB.TxOutput do
     field(:currency, :binary)
     field(:proof, :binary)
     field(:spending_tx_oindex, :integer)
+    field(:childchain_txnhash, :binary)
 
     belongs_to(:creating_transaction, DB.Transaction, foreign_key: :creating_txhash, references: :txhash, type: :binary)
-    belongs_to(:deposit, DB.EthEvent, foreign_key: :creating_deposit, references: :hash, type: :binary)
-
     belongs_to(:spending_transaction, DB.Transaction, foreign_key: :spending_txhash, references: :txhash, type: :binary)
-    belongs_to(:exit, DB.EthEvent, foreign_key: :spending_exit, references: :hash, type: :binary)
+
+    many_to_many(
+      :ethevents,
+      DB.EthEvent,
+      join_through: "ethevents_txoutputs",
+      join_keys: [childchain_txnhash: :childchain_txnhash, rootchain_txnhash: :rootchain_txnhash]
+    )
+
+    timestamps([type: :utc_datetime])
   end
 
   @spec compose_utxo_exit(Utxo.Position.t()) :: {:ok, exit_t()} | {:error, :utxo_not_found}
@@ -76,12 +83,18 @@ defmodule OMG.Watcher.DB.TxOutput do
     query =
       from(
         txo in __MODULE__,
-        where: txo.owner == ^owner and is_nil(txo.spending_txhash) and is_nil(txo.spending_exit),
+        where: txo.owner == ^owner, #and is_nil(txo.spending_txhash) and is_nil(txo.spending_exit),
         order_by: [asc: :blknum, asc: :txindex, asc: :oindex],
         preload: [:creating_transaction, :deposit]
       )
 
-    Repo.all(query)
+    lab = "UTXOs for " <> owner
+
+    r = Repo.all(query)
+
+    IO.inspect(r, label: lab)
+
+    r
   end
 
   @spec get_balance(OMG.Crypto.address_t()) :: list(balance())
@@ -89,7 +102,7 @@ defmodule OMG.Watcher.DB.TxOutput do
     query =
       from(
         t in __MODULE__,
-        where: t.owner == ^owner and is_nil(t.spending_txhash) and is_nil(t.spending_exit),
+        where: t.owner == ^owner, # and is_nil(t.spending_txhash) and is_nil(t.spending_exit),
         group_by: t.currency,
         select: {t.currency, sum(t.amount)}
       )
