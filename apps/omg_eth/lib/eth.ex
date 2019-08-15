@@ -223,7 +223,7 @@ defmodule OMG.Eth do
   end
 
   def parse_events_with_indexed_fields(
-        %{"transactionHash" => txn_hash, "data" => data, "topics" => [_event_sig | indexed_data]} = log,
+        %{"data" => data, "topics" => [_event_sig | indexed_data]} = log,
         {non_indexed_keys, non_indexed_key_types},
         {indexed_keys, indexed_keys_types}
       ) do
@@ -251,7 +251,6 @@ defmodule OMG.Eth do
       |> Map.new()
 
     Map.merge(non_indexed_fields, indexed_fields)
-    |> Map.put(:txn_hash, txn_hash)
     |> common_parse_event(log)
   end
 
@@ -284,9 +283,10 @@ defmodule OMG.Eth do
     |> Map.new()
   end
 
-  defp common_parse_event(result, %{"blockNumber" => eth_height}) do
+  defp common_parse_event(result, %{"blockNumber" => eth_height, "transactionHash" => rootchain_txhash}) do
     result
     |> Map.put(:eth_height, int_from_hex(eth_height))
+    |> Map.put(:rootchain_txhash, from_hex(rootchain_txhash))
   end
 
   defp get_signer_passphrase("0x00a329c0648769a73afac7f9381e08fb43dbea72") do

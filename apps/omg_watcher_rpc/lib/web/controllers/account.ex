@@ -36,6 +36,7 @@ defmodule OMG.WatcherRPC.Web.Controller.Account do
     with {:ok, address} <- expect(params, "address", :address) do
       address
       |> API.Account.get_utxos()
+      |> IO.inspect(label: "API.Account.get_utxos()")
       |> api_response(conn, :utxos)
     end
   end

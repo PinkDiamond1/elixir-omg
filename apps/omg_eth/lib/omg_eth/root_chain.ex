@@ -326,9 +326,9 @@ defmodule OMG.Eth.RootChain do
             decode_exit_started = decode_exit_started(log)
             args = [:utxo_pos, :output_tx, :output_tx_inclusion_proof]
             types = [:uint192, :bytes, :bytes]
-            hash = from_hex(log["transactionHash"])
-            transaction_hash = Eth.get_call_data(hash, "startStandardExit", args, types)
-            Map.put(decode_exit_started, :call_data, transaction_hash)
+            rootchain_txnhash = from_hex(log["transactionHash"])
+            call_data = Eth.get_call_data(rootchain_txnhash, "startStandardExit", args, types)
+            Map.put(decode_exit_started, :call_data, call_data)
           end)
 
         {:ok, exits}

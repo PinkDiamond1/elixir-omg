@@ -16,7 +16,7 @@ defmodule OMG.Watcher.DB.Repo.Migrations.AlterTxOutputsTableAddRootchainTxnHashD
       remove(:blknum)
       remove(:txindex)
 
-      add(:rootchain_txnhash, :binary, primary_key: true)
+      add(:rootchain_txhash, :binary, primary_key: true)
 
       timestamps([type: :utc_datetime])
     end
@@ -27,23 +27,23 @@ defmodule OMG.Watcher.DB.Repo.Migrations.AlterTxOutputsTableAddRootchainTxnHashD
 
 
     create(
-      unique_index(:ethevents, :rootchain_txnhash, name: :rootchain_txnhash_unique_index)
+      unique_index(:ethevents, :rootchain_txhash, name: :rootchain_txhash_unique_index)
     )
 
     alter table(:txoutputs) do
-      add(:childchain_txnhash, :binary)
+      add(:childchain_utxohash, :binary)
     end
 
     create(
-      unique_index(:txoutputs, :childchain_txnhash, name: :childchain_txnhash_unique_index)
+      unique_index(:txoutputs, :childchain_utxohash, name: :childchain_utxohash_unique_index)
     )
 
     flush()
 
-    # backfill childchain_txnhash with values from either creating_deposit or spending_exit
+    # backfill childchain_utxohash with values from either creating_deposit or spending_exit
     execute """
       UPDATE txoutputs as t
-        SET childchain_txnhash =
+        SET childchain_utxohash =
           (SELECT
              CASE WHEN creating_deposit IS NULL THEN spending_exit
                   WHEN spending_exit IS NULL THEN creating_deposit
@@ -71,8 +71,8 @@ defmodule OMG.Watcher.DB.Repo.Migrations.AlterTxOutputsTableAddRootchainTxnHashD
 
 
     create table(:ethevents_txoutputs, primary_key: false) do
-      add(:rootchain_txnhash, references(:ethevents, column: :rootchain_txnhash, type: :binary, on_delete: :restrict), primary_key: true)
-      add(:childchain_txnhash, references(:txoutputs, column: :childchain_txnhash, type: :binary, on_delete: :restrict), primary_key: true)
+      add(:rootchain_txhash, references(:ethevents, column: :rootchain_txhash, type: :binary, on_delete: :restrict), primary_key: true)
+      add(:childchain_utxohash, references(:txoutputs, column: :childchain_utxohash, type: :binary, on_delete: :restrict), primary_key: true)
 
       timestamps([type: :utc_datetime])
     end
@@ -82,11 +82,11 @@ defmodule OMG.Watcher.DB.Repo.Migrations.AlterTxOutputsTableAddRootchainTxnHashD
     execute("ALTER TABLE ethevents_txoutputs ALTER COLUMN updated_at SET DEFAULT (now() at time zone 'utc');");
 
 
-    create(index(:ethevents_txoutputs, :rootchain_txnhash))
-    create(index(:ethevents_txoutputs, :childchain_txnhash))
+    create(index(:ethevents_txoutputs, :rootchain_txhash))
+    create(index(:ethevents_txoutputs, :childchain_utxohash))
 
     create(
-      unique_index(:ethevents_txoutputs, [:rootchain_txnhash, :childchain_txnhash], name: :rootchain_txnhash_childchain_txnhash_unique_index)
+      unique_index(:ethevents_txoutputs, [:rootchain_txhash, :childchain_utxohash], name: :rootchain_txhash_childchain_utxohash_unique_index)
     )
   end
 

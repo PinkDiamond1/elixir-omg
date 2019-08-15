@@ -51,7 +51,7 @@ defmodule OMG.Watcher.DB.TxOutput do
     field(:currency, :binary)
     field(:proof, :binary)
     field(:spending_tx_oindex, :integer)
-    field(:childchain_txnhash, :binary)
+    field(:childchain_utxohash, :binary)
 
     belongs_to(:creating_transaction, DB.Transaction, foreign_key: :creating_txhash, references: :txhash, type: :binary)
     belongs_to(:spending_transaction, DB.Transaction, foreign_key: :spending_txhash, references: :txhash, type: :binary)
@@ -60,7 +60,7 @@ defmodule OMG.Watcher.DB.TxOutput do
       :ethevents,
       DB.EthEvent,
       join_through: "ethevents_txoutputs",
-      join_keys: [childchain_txnhash: :childchain_txnhash, rootchain_txnhash: :rootchain_txnhash]
+      join_keys: [childchain_utxohash: :childchain_utxohash, rootchain_txhash: :rootchain_txhash]
     )
 
     timestamps([type: :utc_datetime])
@@ -83,28 +83,24 @@ defmodule OMG.Watcher.DB.TxOutput do
     query =
       from(
         txo in __MODULE__,
-        where: txo.owner == ^owner, #and is_nil(txo.spending_txhash) and is_nil(txo.spending_exit),
-        order_by: [asc: :blknum, asc: :txindex, asc: :oindex],
-        preload: [:creating_transaction, :deposit]
+        preload: [:ethevents],
+        join: ethevent in assoc(txo, :ethevents),
+        where: txo.owner == ^owner and is_nil(txo.spending_txhash) and ethevent.event_type != ^:exit,
+        order_by: [asc: :blknum, asc: :txindex, asc: :oindex]
       )
 
-    lab = "UTXOs for " <> owner
-
-    r = Repo.all(query)
-
-    IO.inspect(r, label: lab)
-
-    r
+    Repo.all(query)
   end
 
   @spec get_balance(OMG.Crypto.address_t()) :: list(balance())
   def get_balance(owner) do
     query =
       from(
-        t in __MODULE__,
-        where: t.owner == ^owner, # and is_nil(t.spending_txhash) and is_nil(t.spending_exit),
-        group_by: t.currency,
-        select: {t.currency, sum(t.amount)}
+        txo in __MODULE__,
+        join: ethevent in assoc(txo, :ethevents),
+        where: txo.owner == ^owner and is_nil(txo.spending_txhash) and ethevent.event_type != ^:exit,
+        group_by: txo.currency,
+        select: {txo.currency, sum(txo.amount)}
       )
 
     Repo.all(query)
